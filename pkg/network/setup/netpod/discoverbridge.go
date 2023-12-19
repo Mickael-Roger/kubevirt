@@ -71,9 +71,29 @@ func (n NetPod) storeBridgeBindingDHCPInterfaceData(currentStatus *nmstate.Statu
 		if len(dhcpRoutes) > 0 {
 			dhcpConfig.Routes = &dhcpRoutes
 		}
+
+		log.Log.V(4).Infof("The generated dhcpConfig: %s\nRoutes: %+v", dhcpConfig.String(), dhcpConfig.Routes)
+
 	}
 
-	log.Log.V(4).Infof("The generated dhcpConfig: %s\nRoutes: %+v", dhcpConfig.String(), dhcpConfig.Routes)
+	if ipAddress := firstIPGlobalUnicast(podIfaceStatus.IPv6); ipAddress != nil {
+		dhcpConfig.IPAMDisabled = false
+
+		addr, iperr := vishnetlink.ParseAddr(fmt.Sprintf("%s/%d", ipAddress.IP, ipAddress.PrefixLen))
+		if iperr != nil {
+			return iperr
+		}
+		dhcpConfig.IPv6 = *addr
+
+		mac, err := resolveMacAddress(podIfaceStatus.MacAddress, vmiSpecIface.MacAddress)
+		if err != nil {
+			return err
+		}
+		dhcpConfig.MAC = mac
+
+		log.Log.V(4).Infof("The generated dhcpConfig: %s\n", dhcpConfig.String())
+	}
+
 	if err := cache.WriteDHCPInterfaceCache(n.cacheCreator, strconv.Itoa(n.podPID), podIfaceName, &dhcpConfig); err != nil {
 		return fmt.Errorf("failed to save DHCP configuration: %v", err)
 	}
